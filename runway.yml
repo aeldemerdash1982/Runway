@@ -2,7 +2,6 @@ deployments:
   - modules:
       - runway-app.cfn
     environments:
-          dev:
           namespace: runwayapp
           environment: dev
     regions:
