@@ -1,0 +1,175 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Cloud Formation Template for WebServer Instances
+Parameters:
+  NetworkStackName:
+    Description: Provide the name of the Network stack name.
+    Type: String
+  AMI:
+    Description: AMI ID to use for bastion (assumes Amazon Linux 2)
+    Type: String
+    Default: ami-03657b56516ab7912
+  InstanceType:
+    Description: WebServer instance type
+    Type: String
+    Default: t3.micro
+  SSHKeyName:
+    Description: SSH key name to use with bastion host
+    Type: String
+    Default: LinuxKey
+  SSHAllowCIDR:
+    Description: CIDR block to grant access to the bastion host
+    Type: String
+    Default: "0.0.0.0/0"
+Resources:
+  EC2Instance01:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      InstanceType: !Ref InstanceType
+      SubnetId: !ImportValue 
+            'Fn::Sub': '${NetworkStackName}-PublicSubnet1'
+      ImageId: !Ref AMI
+      KeyName: !Ref SSHKeyName
+      SecurityGroupIds:
+        - !Ref PublicInstancesSG
+      Monitoring: true
+      SourceDestCheck: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-web-1"
+  EC2Instance02:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      InstanceType: !Ref InstanceType
+      SubnetId: !ImportValue 
+            'Fn::Sub': '${NetworkStackName}-PublicSubnet2'
+      ImageId: !Ref AMI
+      KeyName: !Ref SSHKeyName
+      SecurityGroupIds:
+        - !Ref PublicInstancesSG
+      Monitoring: true
+      SourceDestCheck: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-web-2"
+  EC2Instance03:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      InstanceType: !Ref InstanceType
+      SubnetId: !ImportValue 
+            'Fn::Sub': '${NetworkStackName}-PrivateSubnet1'
+      ImageId: !Ref AMI
+      KeyName: !Ref SSHKeyName
+      SecurityGroupIds:
+        - !Ref PrivateInstancesSG
+      Monitoring: true
+      SourceDestCheck: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-app-1"
+  EC2Instance04:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      InstanceType: !Ref InstanceType
+      SubnetId: !ImportValue 
+            'Fn::Sub': '${NetworkStackName}-PrivateSubnet1'
+      ImageId: !Ref AMI
+      KeyName: !Ref SSHKeyName
+      SecurityGroupIds:
+        - !Ref PrivateInstancesSG
+      Monitoring: true
+      SourceDestCheck: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-app-2"
+  BastionInstance:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      InstanceType: !Ref InstanceType
+      SubnetId: !ImportValue 
+            'Fn::Sub': '${NetworkStackName}-PublicSubnet1'
+      ImageId: !Ref AMI
+      KeyName: !Ref SSHKeyName
+      SecurityGroupIds:
+        - !Ref BastionHostSG
+      Monitoring: true
+      SourceDestCheck: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-bastion-nat"
+      UserData:
+        "Fn::Base64": !Sub |
+          #!/bin/bash -xe
+          yum update -y
+          # set hostname
+          hostname="${AWS::StackName}-bastion"
+          hostname $hostname
+          echo $hostname > /etc/hostname
+  PublicInstancesSG:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Enable SSH and HTTP access
+      VpcId: !ImportValue 
+        'Fn::Sub': '${NetworkStackName}-VPCID'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: 0.0.0.0/0
+          Description: HTTP access
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: 10.0.0.0/16
+          Description: SSH access
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: '0'
+          ToPort: '65535'
+          CidrIp: 0.0.0.0/0
+  PrivateInstancesSG:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Allow http traffic to our load balancer
+      VpcId: !ImportValue 
+        'Fn::Sub': '${NetworkStackName}-VPCID'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: 10.0.0.0/16
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: 10.0.0.0/16
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: 10.0.0.0/16
+  BastionHostSG:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Allow http traffic to our load balancer
+      VpcId: !ImportValue 
+        'Fn::Sub': '${NetworkStackName}-VPCID'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: !Ref SSHAllowCIDR
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: 10.0.0.0/16
+
+Outputs:
+  URL:
+    Description: Newly created bastion server IP
+    Value: !Join 
+      - ''
+      - - 'http://'
+        - !GetAtt 
+          - BastionInstance
+          - PublicIp
+  

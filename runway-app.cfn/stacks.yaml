@@ -1,0 +1,14 @@
+namespace: runwayapp
+
+stacker_bucket: ''
+
+sys_path: ./
+graph:
+stacks:
+  vpc:
+    template_path: runwayapp_templates/template-01.template
+
+  servers:
+    template_path: runwayapp_templates/template-02.template
+    variables:
+      NetworkStackName: ${output vpc::StackName}

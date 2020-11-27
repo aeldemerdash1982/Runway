@@ -1,0 +1,10 @@
+deployments:
+  - modules:
+      - runway-app.cfn
+    environments:
+          dev:
+          namespace: runwayapp
+          environment: dev
+    regions:
+      - us-east-2
+    account-id: "648251276612"
